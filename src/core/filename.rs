@@ -3,6 +3,22 @@ use std::{ffi::OsStr, path::Path};
 use regex::Regex;
 use walkdir::{DirEntry, WalkDir};
 
+pub fn tidy_command(path: &Path) {
+    let filtered_iter = filter_extensions(path);
+    for file in filtered_iter {
+        let parsed = parse_filename(file.file_name());
+        let options = FilenameOptions::new(parsed.expect("invalid filename format"))
+            .with_title()
+            .with_volume()
+            .with_medium()
+            .with_creator()
+            .with_extension()
+            .build();
+
+        println!("{} -> {}", file.file_name().to_str().unwrap(), options);
+    }
+}
+
 pub fn parse_filename(input: &OsStr) -> Option<Filename> {
     let re = Regex::new(r"^(?<title>.*?).(?<vol>v\d+).(?<year>\(\d{4}\)).(?<medium>\(Digital\)).(?<creator>\(\w+\)).(?<extension>.*)$").unwrap();
     let matched = re.captures(input.to_str()?)?;
