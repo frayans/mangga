@@ -1,23 +1,7 @@
-use std::{ffi::OsStr, path::Path};
+use std::ffi::OsStr;
 
 use regex::Regex;
-use walkdir::{DirEntry, WalkDir};
-
-pub fn tidy_command(path: &Path) {
-    let filtered_iter = filter_extensions(path);
-    for file in filtered_iter {
-        let parsed = parse_filename(file.file_name());
-        let options = FilenameOptions::new(parsed.expect("invalid filename format"))
-            .with_title()
-            .with_volume()
-            .with_medium()
-            .with_creator()
-            .with_extension()
-            .build();
-
-        println!("{} -> {}", file.file_name().to_str().unwrap(), options);
-    }
-}
+use walkdir::DirEntry;
 
 pub fn parse_filename(input: &OsStr) -> Option<Filename> {
     let re = Regex::new(r"^(?<title>.*?).(?<vol>v\d+).(?<year>\(\d{4}\)).(?<medium>\(Digital\)).(?<creator>\(\w+\)).(?<extension>.*)$").unwrap();
@@ -40,11 +24,13 @@ pub fn parse_filename(input: &OsStr) -> Option<Filename> {
     })
 }
 
-pub fn filter_extensions(path: &Path) -> impl Iterator<Item = DirEntry> {
-    WalkDir::new(path)
-        .into_iter()
-        .filter_map(|f| f.ok())
-        .filter(has_supported_extension)
+pub fn has_supported_extension(entry: &DirEntry) -> bool {
+    has_extension(entry, "cbz")
+        || has_extension(entry, "zip")
+        || has_extension(entry, "cbr")
+        || has_extension(entry, "rar")
+        || has_extension(entry, "cb7")
+        || has_extension(entry, "7z")
 }
 
 fn has_extension(entry: &DirEntry, extension: &str) -> bool {
@@ -53,15 +39,6 @@ fn has_extension(entry: &DirEntry, extension: &str) -> bool {
         .extension()
         .map(|it| it == extension)
         .unwrap_or(false)
-}
-
-fn has_supported_extension(entry: &DirEntry) -> bool {
-    has_extension(entry, "cbz")
-        || has_extension(entry, "zip")
-        || has_extension(entry, "cbr")
-        || has_extension(entry, "rar")
-        || has_extension(entry, "cb7")
-        || has_extension(entry, "7z")
 }
 
 #[derive(Debug)]
@@ -74,8 +51,7 @@ pub struct Filename<'a> {
     pub extension: &'a str,
 }
 
-pub struct FilenameOptions<'a> {
-    filename: Filename<'a>,
+pub struct FilenameOptions {
     with_title: bool,
     with_volume: bool,
     with_year: bool,
@@ -84,10 +60,9 @@ pub struct FilenameOptions<'a> {
     with_extension: bool,
 }
 
-impl<'a> FilenameOptions<'a> {
-    pub fn new(filename: Filename<'a>) -> Self {
+impl FilenameOptions {
+    pub fn new() -> Self {
         Self {
-            filename,
             with_title: Default::default(),
             with_volume: Default::default(),
             with_year: Default::default(),
@@ -127,37 +102,37 @@ impl<'a> FilenameOptions<'a> {
         self
     }
 
-    pub fn build(&self) -> String {
+    pub fn build(&self, filename: Filename<'_>) -> String {
         let mut s = String::new();
 
         if self.with_title {
             s.push(' ');
-            s.push_str(&self.filename.title);
+            s.push_str(&filename.title);
         }
 
         if self.with_volume {
             s.push(' ');
-            s.push_str(&self.filename.volume);
+            s.push_str(&filename.volume);
         }
 
         if self.with_year {
             s.push(' ');
-            s.push_str(&self.filename.year);
+            s.push_str(&filename.year);
         }
 
         if self.with_medium {
             s.push(' ');
-            s.push_str(&self.filename.medium);
+            s.push_str(&filename.medium);
         }
 
         if self.with_creator {
             s.push(' ');
-            s.push_str(&self.filename.creator);
+            s.push_str(&filename.creator);
         }
 
         if self.with_extension {
             s.push('.');
-            s.push_str(&self.filename.extension);
+            s.push_str(&filename.extension);
         }
 
         s.trim().to_string()
@@ -185,10 +160,10 @@ mod tests {
     fn test_filename_options() {
         let test_str = "Akane-banashi v01 (2023) (Digital) (1r0n).cbz";
         let parsed = parse_filename(OsStr::new(test_str)).unwrap();
-        let options = FilenameOptions::new(parsed)
+        let options = FilenameOptions::new()
             .with_title()
             .with_volume()
-            .build();
+            .build(parsed);
         assert_eq!(&options, "Akane-banashi v01");
     }
 
@@ -196,11 +171,11 @@ mod tests {
     fn test_filename_options_extension() {
         let test_str = "Akane-banashi v01 (2023) (Digital) (1r0n).cbz";
         let parsed = parse_filename(OsStr::new(test_str)).unwrap();
-        let options = FilenameOptions::new(parsed)
+        let options = FilenameOptions::new()
             .with_title()
             .with_volume()
             .with_extension()
-            .build();
+            .build(parsed);
         assert_eq!(&options, "Akane-banashi v01.cbz");
     }
 }
